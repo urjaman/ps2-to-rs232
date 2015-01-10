@@ -8,15 +8,15 @@
 #include "USI_UART.h"
 
 
-#define BTN1 0x01
-#define BTN2 0x04
-#define BTN3 0x02
-#define BTN4 0x08
+#define BTN4 0x01
+#define BTN3 0x04
+#define BTN2 0x02
+#define BTN1 0x08
 
-#define BTN5 0x11
-#define BTN6 0x14
-#define BTN7 0x12
-#define BTN8 0x18
+#define BTN8 0x11
+#define BTN7 0x14
+#define BTN6 0x12
+#define BTN5 0x18
 
 #define BUTTON_TIME 8
 
