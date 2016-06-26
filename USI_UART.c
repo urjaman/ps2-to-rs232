@@ -1,11 +1,11 @@
 /*****************************************************************************
 *
 * Original Copyright (C) 2003 Atmel Corporation
-* Modified 2015 by Urja Rannikko. Modifications are in Public Domain.
+* Modified 2015,2016 by Urja Rannikko. Modifications are in Public Domain.
 *
 * File              : USI_UART.c
 *
-* Supported devices : ATtiny84
+* Supported devices : ATtiny85
 *
 * Description       : Functions for USI_UART_receiver and USI_UART_transmitter.
 *                     Uses Pin Change Interrupt to detect incoming signals.
@@ -21,15 +21,15 @@
 
 /* Configuration */
 
-#define TIMER_PRESCALER           1
+#define TIMER_PRESCALER           8
 #define UART_RX_BUFFER_SIZE        4     /* 2,4,8,16,32,64,128 or 256 bytes */
 #define UART_TX_BUFFER_SIZE        4
-//#define UTX_ENABLED
+#define UTX_ENABLED
 #define URX_ENABLED
-#define INVERTED_IO
+//#define INVERTED_IO
 #define USE_GPIOR
 #define SLEEP
-#define SLEEP_HARD
+//#define SLEEP_HARD
 
 //********** USI UART Defines **********//
 
@@ -46,7 +46,7 @@
 #define BIT_TIMER		DR(F_CPU/TIMER_PRESCALER,BAUDRATE)
 #define HALF_BIT		DR(BIT_TIMER,2)
 
-#define PCINT_DELAY		(0x11 / TIMER_PRESCALER)
+#define PCINT_DELAY		(0x13 / TIMER_PRESCALER)
 
 #if PCINT_DELAY >= HALF_BIT
 #error "Too much baud or not enough F_CPU"
@@ -79,7 +79,6 @@
 /* Timer configuration */
 #if TIMER_PRESCALER == 1
 #define TIMER_CS _BV(CS00)
-#define TIMER_TST _BV(CS00)
 #elif TIMER_PRESCALER == 8
 #define TIMER_CS _BV(CS01)
 #elif TIMER_PRESCALER == 64
@@ -148,7 +147,7 @@ static unsigned char Bit_Reverse( unsigned char x )
 }
 
 // Flush the UART buffers.
-void USI_UART_Flush_Buffers( void ) 
+void USI_UART_Flush_Buffers( void )
 {
 #ifdef URX_ENABLED
     UART_RxTail = 0;
@@ -168,7 +167,7 @@ static void USI_UART_Initialise_Transmitter( void )
     cli();
     TCNT0  = 0x00;
 #if TIMER_PRESCALER != 1
-    GTCCR |= _BV(PSR10);	// Note: you might need to check with your Timer1 application on if this is acceptable
+    GTCCR |= _BV(PSR0);
 #endif
     TCCR0B  = TIMER_CS;         // Reset the prescaler and start Timer0.
 
@@ -184,7 +183,8 @@ static void USI_UART_Initialise_Transmitter( void )
 #endif
     USISR  = 0xF0 |                                           // Clear all USI interrupt flags.
              0x0F;                                            // Preload the USI counter to generate interrupt at first USI clock.
-    DDRA  |= _BV(5);                                        // Configure USI_DO as output.
+
+    DDRB  |= _BV(1);                                        // Configure USI_DO as output.
 
     SET_STAT(OTX_fromBuff);
 
@@ -213,6 +213,18 @@ void USI_UART_Transmit_Byte( unsigned char data )
 
 #ifdef URX_ENABLED
 
+static void disable_pci_isr(void) {
+	PCMSK &= ~_BV(0);
+}
+
+static void enable_pci_isr(void) {
+	PCMSK |= _BV(0);
+}
+
+static void enable_pci(void) {
+	PCMSK |= _BV(0);
+}
+
 // Initialise USI for UART reception.
 // Note that this function only enables pinchange interrupt on the USI Data Input pin.
 // The USI is configured to read data within the pinchange interrupt.
@@ -225,9 +237,8 @@ static void USI_UART_Initialise_Receiver( void )
     USIDR = 0xff;
 #endif
 
-    PCMSK0 = _BV(6);
-    GIFR   =  (1<<PCIF0);                                    // Clear pin change interrupt flag.
-    GIMSK |=  (1<<PCIE0);                                   // Enable pin change interrupt for DI/PA6/PCINT6.
+    enable_pci();
+
 }
 
 static void USI_UART_Wait_Data(void)
@@ -275,19 +286,25 @@ unsigned char USI_UART_Data_In_Receive_Buffer( void )
 
 // ********** Interrupt Handlers ********** //
 
+#ifndef PCINT0_HOOK
+#define PCINT0_HOOK
+#endif
+
 // The pin change interrupt is used to detect USI_UART reseption.
 // It is here the USI is configured to sample the UART signal.
 ISR(PCINT0_vect)
 {
+    if (
 #ifdef INVERTED_IO
-    if (PINA & _BV(6))
+    (PINB & _BV(0))
 #else
-    if (!( PINA & _BV(6) ))
+    (!( PINB & _BV(0) ))
 #endif
+     && (PCMSK & _BV(0)) )
     {                                                             //  was this pin that generated the pin change interrupt.
         TCNT0  = PCINT_DELAY + HALF_BIT;   // Plant TIMER0 seed to match baudrate (incl interrupt start up time.).
 #if TIMER_PRESCALER != 1
-        GTCCR |= _BV(PSR10);	    // Reset the prescaler ... (NB. If you're using Timer1 this might be ... not desirable.)
+        GTCCR |= _BV(PSR0);
 #endif
         TCCR0B  = TIMER_CS;         // and start Timer0.
 
@@ -298,10 +315,12 @@ ISR(PCINT0_vect)
                                                                   // Note that enabling the USI will also disable the pin change interrupt.
         USISR  = 0xF0 |                                           // Clear all USI interrupt flags.
                  USI_COUNTER_SEED_RECEIVE;                        // Preload the USI counter to generate interrupt.
-        GIMSK &=  ~_BV(PCIE0);                                    // Disable pin change interrupt.
+
+	disable_pci_isr();
 
 	SET_STAT(ORX_ofPkg);
     }
+    PCINT0_HOOK;
 }
 #endif
 
@@ -352,15 +371,14 @@ ISR(USI_OVF_vect)
             	CLR_STAT(OTX_fromBuff);
 
                 TCCR0B  = 0;                 // Stop Timer0.
-                DDRA  &= ~_BV(5);        // Set USI DO as input
+                DDRB  &= ~_BV(1);        // Set USI DO as input
 #ifndef INVERTED_IO
-		PORTA |= _BV(5); // set USI DO pullup
+		PORTB |= _BV(1); // set USI DO pullup
 #else
-		PORTA &= ~_BV(5); // unset USI DO pullup (btw, external hard-ish pull-down recommended if TX used with INVERTED_IO)
+		PORTB &= ~_BV(1); // unset USI DO pullup (btw, external hard-ish pull-down recommended if TX used with INVERTED_IO)
 #endif
                 USICR  =  0;                                            // Disable USI.
-                GIFR   =  (1<<PCIF0);                                    // Clear pin change interrupt flag.
-                GIMSK |=  (1<<PCIE0);                                   // Enable pin change interrupt for PB3:0.
+		enable_pci_isr();
             }
         }
     }
@@ -384,13 +402,12 @@ ISR(USI_OVF_vect)
 #endif
         TCCR0B  = 0;	// Stop Timer0
 #ifndef INVERTED_IO
-	PORTA |= _BV(5); // set USI DO pullup
+	PORTB |= _BV(1); // set USI DO pullup
 #else
-	PORTA &= ~_BV(5); // unset USI DO pullup (btw, external hard-ish pull-down recommended if TX used with INVERTED_IO)
+	PORTB &= ~_BV(1); // unset USI DO pullup (btw, external hard-ish pull-down recommended if TX used with INVERTED_IO)
 #endif
         USICR  =  0;                                            // Disable USI.
-        GIFR   =  (1<<PCIF0);                                    // Clear pin change interrupt flag.
-        GIMSK |=  (1<<PCIE0);                                   // Enable pin change interrupt for PB3:0.
+	enable_pci_isr();
 #endif
 	CLR_STAT(ORX_ofPkg);
 
@@ -403,18 +420,22 @@ void USI_UART_Init(void) {
     TCCR0A = _BV(WGM01);
     TCCR0B = 0;
     OCR0A = (BIT_TIMER-1);
-    DDRA &=  ~_BV(6);
-    DDRA &= ~_BV(5);
+    DDRB &=  ~_BV(1);
+    DDRB &= ~_BV(0);
 #ifdef INVERTED_IO
-    PORTA &= ~_BV(6);
-    PORTA &= ~_BV(5);
+    PORTB &= ~_BV(1);
+    PORTB &= ~_BV(0);
 #else
-    PORTA |= _BV(6);
-    PORTA |= _BV(5);
+    PORTB |= _BV(1);
+    PORTB |= _BV(0);
 #endif
 
     USI_UART_Flush_Buffers();
 #ifdef URX_ENABLED
     USI_UART_Initialise_Receiver();
 #endif
+
+    GIFR   =  (1<<PCIF);                                    // Clear pin change interrupt flag.
+    GIMSK |=  (1<<PCIE);                                   // Enable pin change interrupt for DI/PA6/PCINT6.
+
 }

@@ -1,4 +1,4 @@
-#define BAUDRATE 9600
+#define BAUDRATE 1200
 
 void USI_UART_Flush_Buffers( void );
 void USI_UART_Transmit_Byte( unsigned char data );
