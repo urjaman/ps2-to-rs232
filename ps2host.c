@@ -3,7 +3,7 @@
 #include <util/delay.h>
 #include <stdint.h>
 #include "ps2host.h"
-
+#include "timer.h"
 
 #define RXBUF_SIZE 16
 
@@ -53,25 +53,26 @@ static uint8_t rx_byte;
 static uint16_t tx_dat;
 static volatile uint8_t status;
 
-static void clk_lo(void) {
-	PORTB &= ~_BV(CLK);
-	DDRB |= _BV(CLK);
-}
+#define clk_lo() do { \
+	PORTB &= ~_BV(CLK); \
+	DDRB |= _BV(CLK); \
+	} while(0)
 
-static void clk_hi(void) {
-	DDRB &= ~_BV(CLK);
-	PORTB |= _BV(CLK);
-}
+#define clk_hi() do { \
+	DDRB &= ~_BV(CLK); \
+	PORTB |= _BV(CLK); \
+	} while(0)
 
-static void dat_lo(void) {
-	PORTB &= ~_BV(DAT);
-	DDRB |= _BV(DAT);
-}
+#define dat_lo() do { \
+	PORTB &= ~_BV(DAT); \
+	DDRB |= _BV(DAT); \
+	} while(0)
 
-static void dat_hi(void) {
-	DDRB &= ~_BV(DAT);
-	PORTB |= _BV(DAT);
-}
+#define dat_hi() do { \
+	DDRB &= ~_BV(DAT); \
+	PORTB |= _BV(DAT); \
+	} while(0)
+
 
 void ps2host_pcint0_hook(void)
 {
@@ -140,20 +141,30 @@ uint8_t ps2host_get_data(void) {
 
 void ps2host_tx_data(uint8_t d) {
 	uint16_t dat = (odd(d) << 8) | d;
+	uint16_t time = get_msectimer();
 	/* Wait for actions ... (previous tx, receive, whatever..) */
 	do {
 		PCMSK |= _BV(CLK);
-		while (status); // TODO: timeout
+		while (status) {
+			uint16_t passed = get_msectimer() - time;
+			if (passed > 100) {
+				status = 0; // TIMEOUT, break things :P
+				break;
+			}
+		}
 		PCMSK &= ~_BV(CLK);
 	} while (status); // check that we "got" the authority to do stuff...
 	tx_dat = dat;
 	status = TX_D0;
+	dat_hi(); // release dat if we broke things
 	clk_lo();
 	_delay_us(120);
 	dat_lo();
 	_delay_us(10);
 	clk_hi();
 	PCMSK |= _BV(CLK);
+	return;
+
 }
 
 

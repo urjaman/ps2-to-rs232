@@ -21,9 +21,9 @@
 
 /* Configuration */
 
-#define TIMER_PRESCALER           1
-#define UART_RX_BUFFER_SIZE        16     /* 2,4,8,16,32,64,128 or 256 bytes */
-#define UART_TX_BUFFER_SIZE        4
+#define TIMER_PRESCALER           64
+#define UART_RX_BUFFER_SIZE        8     /* 2,4,8,16,32,64,128 or 256 bytes */
+#define UART_TX_BUFFER_SIZE        32
 #define UTX_ENABLED
 #define URX_ENABLED
 //#define INVERTED_IO
@@ -209,6 +209,16 @@ void USI_UART_Transmit_Byte( unsigned char data )
         USI_UART_Initialise_Transmitter();
     }
 }
+
+
+uint8_t USI_UART_Transmit_Busy(void)
+{
+	uint8_t bf = (UART_TxHead != UART_TxTail);
+	if (TST_STAT(OTX_fromBuff)) bf = 1;
+	return bf;
+}
+
+
 #endif
 
 #ifdef URX_ENABLED

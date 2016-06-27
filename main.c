@@ -7,6 +7,9 @@
 #include <util/delay.h>
 #include "USI_UART.h"
 #include "ps2host.h"
+#include "timer.h"
+#include "ps2mouse.h"
+#include "msmouse.h"
 
 void sys_sleep(uint8_t mode)
 {
@@ -44,10 +47,14 @@ void main(void) {
 
 	USI_UART_Init();
 	ps2host_init();
+	timer_init();
+	ps2mouse_init();
 	sei();
 	DDRB &= ~_BV(4);
 	PORTB |= _BV(4);
+	msmouse_init();
 
+#if 0
 	USI_UART_Transmit_Byte('\r');
 	USI_UART_Transmit_Byte('\n');
 	USI_UART_Transmit_Byte('H');
@@ -55,19 +62,29 @@ void main(void) {
 	hex_out(0xE5);
 	USI_UART_Transmit_Byte('\r');
 	USI_UART_Transmit_Byte('\n');
-
-	_delay_ms(100);
-	while (ps2host_has_data()) hex_out(ps2host_get_data());
-	ps2host_tx_data(0xFF);
-	_delay_ms(100);
-	while (ps2host_has_data()) hex_out(ps2host_get_data());
-	ps2host_tx_data(0xF4);
-
+#endif
+	
 	for (;;) {
+		ps2mouse_run();
+		msmouse_run();
+#if 0
 		if (USI_UART_Data_In_Receive_Buffer()) {
 			_delay_ms(15);
 			while (USI_UART_Data_In_Receive_Buffer()) USI_UART_Transmit_Byte(USI_UART_Receive_Byte());
 		}
-		if (ps2host_has_data()) hex_out(ps2host_get_data());
+		if (!USI_UART_Transmit_Busy()) {
+			uint16_t bv=0;
+			uint8_t b;
+			int8_t x,y;
+			b = ps2mouse_get_delta(bv,bv,&x,&y);
+			hex_out(PINB);
+			hex_out(b);
+			hex_out(x);
+			hex_out(y);
+			USI_UART_Transmit_Byte('\r');
+			USI_UART_Transmit_Byte('\n');
+		}
+#endif
+
 	}
 }

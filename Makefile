@@ -1,7 +1,7 @@
 # AVR-GCC Makefile
 PROJECT=ps2tors232
-SOURCES=main.c USI_UART.c ps2host.c
-DEPS=Makefile USI_UART.h main.h ps2host.h
+SOURCES=main.c USI_UART.c ps2host.c timer.c ps2mouse.c msmouse_out.c
+DEPS=Makefile USI_UART.h main.h ps2host.h timer.h ps2mouse.h msmouse.h
 CC=avr-gcc
 OBJCOPY=avr-objcopy
 MMCU=attiny85
