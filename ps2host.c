@@ -5,7 +5,7 @@
 #include "ps2host.h"
 
 
-#define RXBUF_SIZE 4
+#define RXBUF_SIZE 16
 
 #define DAT 3
 #define CLK 4
@@ -40,6 +40,7 @@ enum stat {
 	TX_D6,
 	TX_D7,
 	TX_PAR,
+	TX_STOP,
 	TX_ACK
 };
 
@@ -81,9 +82,11 @@ void ps2host_pcint0_hook(void)
 		status = s+1;
 		/* first, check for TX... */
 		if (s>=TX_D0) {
-			if (s == TX_ACK) {
-				// TODO: check the ack bit...
+			if (s == TX_STOP) {
 				dat_hi();
+				return;
+			} else if (s == TX_ACK) {
+				// TODO: check the ack bit...
 				status = 0;
 				return;
 			}
@@ -95,13 +98,13 @@ void ps2host_pcint0_hook(void)
 			tx_dat = tx_dat >> 1;
 			return;
 		} else if (s == RX_PAR) {
-		//	if ((!!d) == odd(rx_byte)) {
+			if ((!!d) == odd(rx_byte)) {
 				uint8_t off = rx_wp;
 				rx_buff[off] = rx_byte;
 				rx_wp = (off+1)&(RXBUF_SIZE-1);
-		//	} else {
+			} else {
 				// TODO: Handle error...
-		//	}
+			}
 			return;
 		} else if (s == RX_START) {
 			if (d) {
