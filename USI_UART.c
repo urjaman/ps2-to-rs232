@@ -21,8 +21,8 @@
 
 /* Configuration */
 
-#define TIMER_PRESCALER           8
-#define UART_RX_BUFFER_SIZE        4     /* 2,4,8,16,32,64,128 or 256 bytes */
+#define TIMER_PRESCALER           1
+#define UART_RX_BUFFER_SIZE        16     /* 2,4,8,16,32,64,128 or 256 bytes */
 #define UART_TX_BUFFER_SIZE        4
 #define UTX_ENABLED
 #define URX_ENABLED
@@ -280,7 +280,9 @@ unsigned char USI_UART_Receive_Byte( void )
 // Check if there is data in the receive buffer.
 unsigned char USI_UART_Data_In_Receive_Buffer( void )
 {
-    return ( UART_RxHead != UART_RxTail );                // Return 0 (FALSE) if the receive buffer is empty.
+    int8_t bytes = UART_RxHead - UART_RxTail;
+    if (bytes < 0) bytes += UART_RX_BUFFER_SIZE;
+    return bytes;
 }
 
 

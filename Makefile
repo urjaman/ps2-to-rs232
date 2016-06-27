@@ -1,14 +1,14 @@
 # AVR-GCC Makefile
 PROJECT=ps2tors232
-SOURCES=main.c USI_UART.c
-DEPS=Makefile USI_UART.h main.h
+SOURCES=main.c USI_UART.c ps2host.c
+DEPS=Makefile USI_UART.h main.h ps2host.h
 CC=avr-gcc
 OBJCOPY=avr-objcopy
 MMCU=attiny85
 #AVRBINDIR=~/avr-tools/bin/
 AVRDUDEMCU=t85
 AVRDUDECMD=sudo avrdude -p $(AVRDUDEMCU) -c avrispmkII -P usb
-DFLAGS=-DF_CPU=1000000
+DFLAGS=-DF_CPU=8000000
 CFLAGS=-mmcu=$(MMCU) -Os -g -Wall -W -pipe -std=gnu99 -Wno-main $(DFLAGS)
 
 $(PROJECT).hex: $(PROJECT).out
